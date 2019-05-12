@@ -1,0 +1,24 @@
+{
+  "name": "arslaniftikhar/curl",
+  "description": "Curl wrapper for PHP",
+  "keywords": [
+    "CURL",
+    "CURL-PHP",
+    "PHP",
+    "API",
+    "rest-client"
+  ],
+  "type": "library",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "Arslan Iftikhar",
+      "email": "arslaniftikhar@gmail.com"
+    }
+  ],
+  "autoload": {
+    "psr-4": {
+      "Curl\\": "src/"
+    }
+  }
+}
