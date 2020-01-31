@@ -57,6 +57,12 @@ class Curl
      */
     public $user_agent;
 
+    /**
+     * User agent for the current request
+     * @var string
+     */
+    public $response_info = [];
+
 
     /**
      * Curl constructor.
@@ -133,9 +139,11 @@ class Curl
         $this->setMethod($method);
         $this->setOptions($url, $payload);
         $this->setHeader();
+        $response = curl_exec($this->request);
+
+        $curl_info = curl_getinfo($this->request);
         $errno = curl_errno($this->request);
         $error = curl_error($this->request);
-        $response = curl_exec($this->request);
         curl_close($this->request);
 
         if ($errno) {
@@ -143,7 +151,7 @@ class Curl
             throw new Exception($this->error);
         }
         if ($response) {
-            $response = new CurlResponse($response);
+            $response = new CurlResponse($response, $curl_info);
             $this->body = $response->body;
             $this->response_header = $response->headers;
         }
@@ -231,7 +239,14 @@ class CurlResponse
      *
      * @var array
      **/
-    public $headers = array();
+    public $headers = [];
+
+    /**
+     * Curl response info
+     *
+     * @var array
+     **/
+    private $curlInfo = [];
 
     /**
      * Accepts the result of a curl request as a string
@@ -243,29 +258,30 @@ class CurlResponse
      * </code>
      *
      * @param string $response
-     **/
-    function __construct($response)
+     * @param array $curlInfo
+     */
+    function __construct($response, $curlInfo = [])
     {
-        # Headers regex
-        $pattern = '#HTTP/\d\.\d.*?$.*?\r\n\r\n#ims';
+        $headerSize = $curlInfo["header_size"];
+        $headers_string = substr($response, 0, $headerSize);
 
-        # Extract headers from response
-        preg_match_all($pattern, $response, $matches);
-        $headers_string = array_pop($matches[0]);
-        $headers = explode("\r\n", str_replace("\r\n\r\n", '', $headers_string));
+        # Set body from the response body
+        $this->body = substr($response, $headerSize);
 
-        # Remove headers from the response body
-        $this->body = str_replace($headers_string, '', $response);
+        $headers = preg_split("/\r\n\r\n|\n\n|\r\r/", trim($headers_string));
 
-        # Extract the version and status from the first header
-        $version_and_status = array_shift($headers);
-        preg_match('#HTTP/(\d\.\d)\s(\d\d\d)\s(.*)#', $version_and_status, $matches);
-        $this->headers['Http-Version'] = $matches[1];
-        $this->headers['Status-Code'] = $matches[2];
-        $this->headers['Status'] = $matches[2] . ' ' . $matches[3];
+        $lastHeaderLine = array_pop($headers);
+
+        $headerLines = preg_split("/\r\n|\n|\r/", $lastHeaderLine);
+
+        $versionAndStatus = explode(' ', trim(array_shift($headerLines)), 3);
+
+        $this->headers['Http-Version'] = $versionAndStatus[0];
+        $this->headers['Status-Code'] = $versionAndStatus[1];
+        $this->headers['Status'] = $versionAndStatus[0] . ' ' . $versionAndStatus[1];
 
         # Convert headers into an associative array
-        foreach ($headers as $header) {
+        foreach ($headerLines as $header) {
             preg_match('#(.*?)\:\s(.*)#', $header, $matches);
             $this->headers[$matches[1]] = $matches[2];
         }
